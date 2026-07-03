@@ -1,6 +1,6 @@
 ---
 id: tko-8l55
-status: open
+status: closed
 deps: [tko-vwbb]
 links: []
 created: 2026-07-03T20:54:48Z
@@ -13,3 +13,9 @@ parent: tko-9noa
 
 tko edit <id>: fetch body to a temp file, open $EDITOR (fallback vi), parse the result and write it back to the issue.
 
+
+## Notes
+
+**2026-07-03T21:24:00Z**
+
+Implemented edit(): renders the ticket to a temp file, opens $EDITOR (default vi), then re-parses and persists the edited document back to the issue.

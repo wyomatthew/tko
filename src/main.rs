@@ -2,48 +2,30 @@
 
 mod backend;
 mod cli;
+mod commands;
 mod config;
 mod error;
 mod ticket;
 
 use clap::Parser;
 
-use crate::cli::{Cli, Command, DepCommand};
+use crate::backend::Backend;
+use crate::backend::gitea::GiteaBackend;
+use crate::cli::Cli;
+use crate::config::{BackendKind, Config};
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    run(cli)
+    let config = Config::discover(&std::env::current_dir()?)?;
+    let token = config.resolve_token()?;
+    let backend = build_backend(&config, token)?;
+    commands::dispatch(backend.as_ref(), cli.json, cli.command)
 }
 
-/// Dispatch a parsed [`Cli`] to its command handler.
-///
-/// Command bodies are implemented in their respective tickets; for now each
-/// dispatch arm reports that the command is not yet implemented so the CLI
-/// skeleton is exercisable end to end.
-fn run(cli: Cli) -> anyhow::Result<()> {
-    let name = match &cli.command {
-        Command::Create { .. } => "create",
-        Command::Show { .. } => "show",
-        Command::List { .. } => "list",
-        Command::Ready { .. } => "ready",
-        Command::Blocked { .. } => "blocked",
-        Command::Closed { .. } => "closed",
-        Command::Start { .. } => "start",
-        Command::Close { .. } => "close",
-        Command::Reopen { .. } => "reopen",
-        Command::Status { .. } => "status",
-        Command::Edit { .. } => "edit",
-        Command::AddNote { .. } => "add-note",
-        Command::Dep { command } => match command {
-            DepCommand::Add { .. } => "dep add",
-            DepCommand::Remove { .. } => "dep remove",
-            DepCommand::Tree { .. } => "dep tree",
-            DepCommand::Check => "dep check",
-        },
-        Command::Undep { .. } => "undep",
-        Command::Link { .. } => "link",
-        Command::Unlink { .. } => "unlink",
-    };
-
-    anyhow::bail!("`{name}` is not yet implemented");
+fn build_backend(config: &Config, token: String) -> anyhow::Result<Box<dyn Backend>> {
+    match config.backend.kind {
+        BackendKind::Gitea => Ok(Box::new(GiteaBackend::new(config, token)?)),
+        BackendKind::Github => anyhow::bail!("the github backend is not yet implemented"),
+        BackendKind::Gitlab => anyhow::bail!("the gitlab backend is not yet implemented"),
+    }
 }

@@ -31,9 +31,10 @@ fn version_flag_reports_version() {
 fn list_alias_ls_parses() {
     tko()
         .arg("ls")
+        .current_dir(std::env::temp_dir())
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not yet implemented"));
+        .stderr(predicate::str::contains("no tko.toml found"));
 }
 
 #[test]

@@ -166,6 +166,36 @@ fn is_zero(priority: &i64) -> bool {
 }
 
 impl Ticket {
+    /// Renders the ticket as a JSON value, including the body fields that are
+    /// excluded from the YAML frontmatter serialization (title, description,
+    /// design, acceptance, notes).
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "status": self.status.to_string(),
+            "type": self.ticket_type.map(|t| t.to_string()),
+            "priority": self.priority,
+            "assignee": self.assignee,
+            "parent": self.parent,
+            "external_ref": self.external_ref,
+            "pr": self.pr,
+            "tags": self.tags,
+            "deps": self.deps,
+            "links": self.links,
+            "created": self.created.format(&Rfc3339).unwrap_or_default(),
+            "title": self.title,
+            "description": self.description,
+            "design": self.design,
+            "acceptance": self.acceptance,
+            "notes": self.notes.iter().map(|n| serde_json::json!({
+                "timestamp": n.timestamp.format(&Rfc3339).unwrap_or_default(),
+                "content": n.content,
+            })).collect::<Vec<_>>(),
+        })
+    }
+}
+
+impl Ticket {
     /// Parses a ticket document (frontmatter + markdown body).
     pub fn parse(data: &[u8]) -> Result<Ticket> {
         let text = std::str::from_utf8(data).map_err(|e| Error::TicketFormat(e.to_string()))?;

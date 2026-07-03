@@ -8,6 +8,8 @@
 //! own ids — the canonical id is the backend's native issue number.
 #![allow(dead_code)]
 
+pub mod gitea;
+
 use time::OffsetDateTime;
 
 use crate::error::{Error, Result};

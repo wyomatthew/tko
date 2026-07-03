@@ -135,18 +135,6 @@ fn print_ticket(json: bool, ticket: &Ticket) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn git_user_name() -> Option<String> {
-    let output = std::process::Command::new("git")
-        .args(["config", "user.name"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    (!name.is_empty()).then_some(name)
-}
-
 #[allow(clippy::too_many_arguments)]
 fn create(
     backend: &dyn Backend,
@@ -172,8 +160,6 @@ fn create(
         Some(t) => Some(t.parse::<Type>()?),
         None => Some(Type::Task),
     };
-
-    let assignee = assignee.or_else(git_user_name);
 
     let mut ticket = Ticket {
         id: String::new(),

@@ -40,6 +40,11 @@ struct ConfigToml {
 
 /// Runs `tko init` against the current directory.
 pub fn run(args: InitArgs) -> anyhow::Result<()> {
+    let path = Path::new("tko.toml");
+    if path.exists() && !args.force {
+        anyhow::bail!("{} already exists; pass --force to overwrite", path.display());
+    }
+
     let missing_required = args.url.is_none() || args.owner.is_none() || args.repo.is_none();
 
     let (kind, url, owner, repo, token_env) = if !missing_required {
@@ -83,13 +88,40 @@ pub fn run(args: InitArgs) -> anyhow::Result<()> {
     toml::from_str::<Config>(&toml_str)
         .map_err(|e| anyhow::anyhow!("generated tko.toml failed to parse: {e}"))?;
 
-    let path = Path::new("tko.toml");
-    if path.exists() && !args.force {
-        anyhow::bail!("{} already exists; pass --force to overwrite", path.display());
-    }
     std::fs::write(path, &toml_str)?;
     println!("Wrote {}", path.display());
+    print_welcome(&kind, token_env.as_deref());
     Ok(())
+}
+
+fn print_welcome(kind: &str, token_env: Option<&str>) {
+    println!(
+        r#"
+      /\_/\
+     ( o.o )   tko is ready!
+      > ^ <    ~ tickets, tidied ~
+"#
+    );
+
+    let default_token_env = match kind.to_lowercase().as_str() {
+        "gitea" => "GITEA_TOKEN",
+        "github" => "GITHUB_TOKEN",
+        "gitlab" => "GITLAB_TOKEN",
+        _ => "TKO_TOKEN",
+    };
+    let env_name = token_env.unwrap_or(default_token_env);
+
+    println!("Before you start, set your backend access token. tko looks for it in order:");
+    println!("  1. Environment variable: {env_name} (or TKO_TOKEN)");
+    println!("  2. .env in this project's root");
+    println!("  3. ~/.config/tko/secrets.env");
+    println!();
+    println!("The token is never stored in tko.toml — keep it out of version control.");
+    println!();
+    println!("Next steps:");
+    println!("  tko create \"My first ticket\"   # create a ticket");
+    println!("  tko list                        # see open tickets");
+    println!("  tko --help                      # explore all commands");
 }
 
 fn render_toml(

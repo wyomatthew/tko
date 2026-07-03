@@ -1,6 +1,7 @@
 //! `tko` — a ticket management CLI backed by a git-service issue tracker.
 
 mod cli;
+mod config;
 mod error;
 
 use clap::Parser;

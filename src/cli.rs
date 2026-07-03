@@ -209,7 +209,7 @@ pub enum Command {
         #[arg(long)]
         kind: Option<String>,
 
-        /// Base URL of the backend instance.
+        /// Base URL of the backend instance (e.g. https://gitea.example.com).
         #[arg(long)]
         url: Option<String>,
 

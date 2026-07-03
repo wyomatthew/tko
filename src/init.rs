@@ -135,7 +135,7 @@ fn prompt_for_config(
 ) -> anyhow::Result<(String, String, String, String, Option<String>)> {
     let kind = prompt("Backend kind", args.kind.as_deref().or(Some("gitea")))?;
     let url = loop {
-        let candidate = prompt("Backend URL", args.url.as_deref())?;
+        let candidate = prompt("Backend URL (e.g. https://gitea.example.com)", args.url.as_deref())?;
         match validate_url(&candidate) {
             Ok(()) => break candidate,
             Err(e) => eprintln!("{e}"),

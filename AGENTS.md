@@ -168,6 +168,26 @@ flag. Behavior matches `tk` (see `~/code/ticket/internal/cmd/`).
 
 ---
 
+## Agent workflow
+
+When fulfilling a user request, follow this ticket-driven workflow:
+
+1. **Decide whether to use `tk`.** If the user references a `tk` identifier
+   directly, use `tk`. Otherwise, run `tk list` to see the open tickets and
+   check whether any existing ticket is relevant to the request. If one is, use
+   `tk` while completing the work; if none apply, proceed without `tk`.
+2. **Load context and mark in-progress.** When using `tk`, read the complete
+   context around the ticket and any immediately related tickets (parents,
+   deps, links). Ensure status is current by running `tk start` on every ticket
+   you are working on.
+3. **Complete the task.** Do the work as described. If anything unexpected comes
+   up during implementation, or the design diverges from the original ticket
+   context, update the ticket appropriately (e.g. `tk edit`, `tk add-note`).
+4. **Close out.** Once the work is complete, finish the ticket lifecycle by
+   marking it closed with `tk close`.
+
+---
+
 ## Reference
 
 - `tk` source of truth for CLI + format: `~/code/ticket`

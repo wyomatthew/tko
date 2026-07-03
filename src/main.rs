@@ -5,17 +5,23 @@ mod cli;
 mod commands;
 mod config;
 mod error;
+mod init;
 mod ticket;
 
 use clap::Parser;
 
 use crate::backend::Backend;
 use crate::backend::gitea::GiteaBackend;
-use crate::cli::Cli;
+use crate::cli::{Cli, Command};
 use crate::config::{BackendKind, Config};
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    if let Command::Init { kind, url, owner, repo, token_env, force, non_interactive } = cli.command {
+        return init::run(init::InitArgs { kind, url, owner, repo, token_env, force, non_interactive });
+    }
+
     let config = Config::discover(&std::env::current_dir()?)?;
     let token = config.resolve_token()?;
     let backend = build_backend(&config, token)?;

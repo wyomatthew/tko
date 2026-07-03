@@ -202,6 +202,37 @@ pub enum Command {
         /// The linked ticket id to remove.
         target_id: String,
     },
+
+    /// Generate a project's `tko.toml`, interactively or from flags.
+    Init {
+        /// Backend kind (only `gitea` is supported in v1).
+        #[arg(long)]
+        kind: Option<String>,
+
+        /// Base URL of the backend instance.
+        #[arg(long)]
+        url: Option<String>,
+
+        /// Repo owner / namespace.
+        #[arg(long)]
+        owner: Option<String>,
+
+        /// Repo name.
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// Name of the env var holding the backend access token.
+        #[arg(long = "token-env")]
+        token_env: Option<String>,
+
+        /// Overwrite an existing tko.toml.
+        #[arg(long)]
+        force: bool,
+
+        /// Fail instead of prompting if any required value is missing.
+        #[arg(long, alias = "yes")]
+        non_interactive: bool,
+    },
 }
 
 /// Dependency subcommands.

@@ -65,6 +65,7 @@ pub fn dispatch(backend: &dyn Backend, json: bool, command: Command) -> anyhow::
         Command::Undep { id, dep_id } => dep_remove(backend, json, &id, &dep_id),
         Command::Link { ids } => link(backend, json, ids),
         Command::Unlink { id, target_id } => unlink(backend, json, &id, &target_id),
+        Command::Init { .. } => unreachable!("Init is handled in main before backend setup"),
     }
 }
 

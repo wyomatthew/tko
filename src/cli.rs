@@ -233,6 +233,13 @@ pub enum Command {
         #[arg(long, alias = "yes")]
         non_interactive: bool,
     },
+
+    /// Bootstrap or append a `tko` agent workflow section to `AGENTS.md`.
+    AgentsMd {
+        /// Write the section even if one is already present.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// Dependency subcommands.

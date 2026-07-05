@@ -1,5 +1,6 @@
 //! `tko` — a ticket management CLI backed by a git-service issue tracker.
 
+mod agents_md;
 mod backend;
 mod cli;
 mod commands;
@@ -20,6 +21,10 @@ fn main() -> anyhow::Result<()> {
 
     if let Command::Init { kind, url, owner, repo, token_env, force, non_interactive } = cli.command {
         return init::run(init::InitArgs { kind, url, owner, repo, token_env, force, non_interactive });
+    }
+
+    if let Command::AgentsMd { force } = cli.command {
+        return agents_md::run(force);
     }
 
     let config = Config::discover(&std::env::current_dir()?)?;

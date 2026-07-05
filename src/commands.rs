@@ -66,6 +66,7 @@ pub fn dispatch(backend: &dyn Backend, json: bool, command: Command) -> anyhow::
         Command::Link { ids } => link(backend, json, ids),
         Command::Unlink { id, target_id } => unlink(backend, json, &id, &target_id),
         Command::Init { .. } => unreachable!("Init is handled in main before backend setup"),
+        Command::AgentsMd { .. } => unreachable!("AgentsMd is handled in main before backend setup"),
     }
 }
 

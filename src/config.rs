@@ -237,9 +237,42 @@ mod tests {
         assert!(matches!(err, Error::ConfigParse(_)));
     }
 
+    /// Guards a single test's env var mutations, always restoring the
+    /// previous process-wide state on drop (even on panic) so a failure in
+    /// one test can't poison the ones that run after it. Also points
+    /// `XDG_CONFIG_HOME` at an empty temp dir, isolating tests from any real
+    /// `~/.config/tko/secrets.env` the developer running the suite might have.
+    struct EnvGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        saved: Vec<(&'static str, Option<String>)>,
+        _config_home: TempDir,
+    }
+
+    impl EnvGuard {
+        fn new() -> Self {
+            let lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let names = ["TKO_TOKEN", "GITEA_TOKEN", "MY_TOKEN", "XDG_CONFIG_HOME"];
+            let saved = names.iter().map(|&n| (n, std::env::var(n).ok())).collect();
+            let config_home = tempdir();
+            unsafe { std::env::set_var("XDG_CONFIG_HOME", config_home.path()) };
+            Self { _lock: lock, saved, _config_home: config_home }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (name, value) in &self.saved {
+                match value {
+                    Some(v) => unsafe { std::env::set_var(name, v) },
+                    None => unsafe { std::env::remove_var(name) },
+                }
+            }
+        }
+    }
+
     #[test]
     fn token_resolved_from_default_env_var() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = EnvGuard::new();
         let tmp = tempdir();
         write(
             &tmp.path().join("tko.toml"),
@@ -255,13 +288,12 @@ mod tests {
 
         unsafe { std::env::set_var("TKO_TOKEN", "abc123") };
         let token = config.resolve_token().unwrap();
-        unsafe { std::env::remove_var("TKO_TOKEN") };
         assert_eq!(token, "abc123");
     }
 
     #[test]
     fn token_resolved_from_custom_env_var() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = EnvGuard::new();
         let tmp = tempdir();
         write(
             &tmp.path().join("tko.toml"),
@@ -278,13 +310,12 @@ mod tests {
 
         unsafe { std::env::set_var("MY_TOKEN", "xyz789") };
         let token = config.resolve_token().unwrap();
-        unsafe { std::env::remove_var("MY_TOKEN") };
         assert_eq!(token, "xyz789");
     }
 
     #[test]
     fn token_resolved_from_backend_fallback_env_var() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = EnvGuard::new();
         let tmp = tempdir();
         write(
             &tmp.path().join("tko.toml"),
@@ -298,16 +329,14 @@ mod tests {
         );
         let config = Config::discover(tmp.path()).unwrap();
 
-        unsafe { std::env::remove_var("TKO_TOKEN") };
         unsafe { std::env::set_var("GITEA_TOKEN", "fallback-token") };
         let token = config.resolve_token().unwrap();
-        unsafe { std::env::remove_var("GITEA_TOKEN") };
         assert_eq!(token, "fallback-token");
     }
 
     #[test]
     fn token_resolved_from_project_dotenv() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = EnvGuard::new();
         let tmp = tempdir();
         write(
             &tmp.path().join("tko.toml"),
@@ -322,15 +351,13 @@ mod tests {
         write(&tmp.path().join(".env"), "TKO_TOKEN=from-dotenv\n");
         let config = Config::discover(tmp.path()).unwrap();
 
-        unsafe { std::env::remove_var("TKO_TOKEN") };
-        unsafe { std::env::remove_var("GITEA_TOKEN") };
         let token = config.resolve_token().unwrap();
         assert_eq!(token, "from-dotenv");
     }
 
     #[test]
     fn env_var_takes_precedence_over_dotenv() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = EnvGuard::new();
         let tmp = tempdir();
         write(
             &tmp.path().join("tko.toml"),
@@ -347,13 +374,12 @@ mod tests {
 
         unsafe { std::env::set_var("TKO_TOKEN", "from-env") };
         let token = config.resolve_token().unwrap();
-        unsafe { std::env::remove_var("TKO_TOKEN") };
         assert_eq!(token, "from-env");
     }
 
     #[test]
     fn token_not_found_errors() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = EnvGuard::new();
         let tmp = tempdir();
         write(
             &tmp.path().join("tko.toml"),
@@ -367,8 +393,6 @@ mod tests {
         );
         let config = Config::discover(tmp.path()).unwrap();
 
-        unsafe { std::env::remove_var("TKO_TOKEN") };
-        unsafe { std::env::remove_var("GITEA_TOKEN") };
         let err = config.resolve_token().unwrap_err();
         assert!(matches!(err, Error::TokenNotFound { .. }));
     }

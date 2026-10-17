@@ -66,7 +66,9 @@ pub fn dispatch(backend: &dyn Backend, json: bool, command: Command) -> anyhow::
         Command::Link { ids } => link(backend, json, ids),
         Command::Unlink { id, target_id } => unlink(backend, json, &id, &target_id),
         Command::Init { .. } => unreachable!("Init is handled in main before backend setup"),
-        Command::AgentsMd { .. } => unreachable!("AgentsMd is handled in main before backend setup"),
+        Command::AgentsMd { .. } => {
+            unreachable!("AgentsMd is handled in main before backend setup")
+        }
     }
 }
 
@@ -152,10 +154,14 @@ fn create(
     parent: Option<String>,
     tags: Vec<String>,
 ) -> anyhow::Result<()> {
-    let priority = priority.map(i64::from).unwrap_or(crate::ticket::DEFAULT_PRIORITY);
+    let priority = priority
+        .map(i64::from)
+        .unwrap_or(crate::ticket::DEFAULT_PRIORITY);
     crate::ticket::validate_priority(priority)?;
 
-    let parent = parent.map(|p| resolve(backend, &p).map(|n| n.to_string())).transpose()?;
+    let parent = parent
+        .map(|p| resolve(backend, &p).map(|n| n.to_string()))
+        .transpose()?;
 
     let ticket_type = match ticket_type {
         Some(t) => Some(t.parse::<Type>()?),
@@ -311,7 +317,11 @@ fn sort_tickets(tickets: &mut [Ticket], sort: Option<&str>, reverse: bool) {
             "title" => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
             _ => a.priority.cmp(&b.priority).then_with(|| a.id.cmp(&b.id)),
         };
-        if reverse { ordering.reverse() } else { ordering }
+        if reverse {
+            ordering.reverse()
+        } else {
+            ordering
+        }
     });
 }
 
@@ -445,7 +455,12 @@ fn edit(backend: &dyn Backend, id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn add_note(backend: &dyn Backend, json: bool, id: &str, text: Option<String>) -> anyhow::Result<()> {
+fn add_note(
+    backend: &dyn Backend,
+    json: bool,
+    id: &str,
+    text: Option<String>,
+) -> anyhow::Result<()> {
     let number = resolve(backend, id)?;
     let mut ticket = read_ticket(backend, number)?;
 
@@ -558,60 +573,150 @@ fn dep_remove(backend: &dyn Backend, json: bool, id: &str, dep_id: &str) -> anyh
     }
 }
 
-fn status_symbol(status: Status) -> &'static str {
-    match status {
-        Status::Open => "[ ]",
-        Status::InProgress => "[~]",
-        Status::Closed => "[x]",
-    }
+/// Dependency graph view used to render `dep tree`.
+struct DepTree<'a> {
+    by_id: &'a std::collections::HashMap<&'a str, &'a Ticket>,
+    edges: std::collections::HashMap<&'a str, Vec<&'a str>>,
+    max_depth: std::collections::HashMap<&'a str, usize>,
+    subtree_depth: std::collections::HashMap<&'a str, usize>,
 }
 
-fn build_dep_tree_string(
-    ticket: &Ticket,
-    by_id: &std::collections::HashMap<&str, &Ticket>,
-    prefix: &str,
-    is_last: bool,
-) -> String {
-    let mut out = String::new();
-    let connector = if is_last { "└── " } else { "├── " };
-    let node = format!(
-        "{} {} - {}",
-        status_symbol(ticket.status),
-        ticket.id,
-        ticket.title
-    );
-    if prefix.is_empty() {
-        out.push_str(&node);
-        out.push('\n');
-    } else {
-        out.push_str(prefix);
-        out.push_str(connector);
-        out.push_str(&node);
-        out.push('\n');
-    }
-
-    let child_prefix = if prefix.is_empty() {
-        String::new()
-    } else if is_last {
-        format!("{prefix}    ")
-    } else {
-        format!("{prefix}│   ")
-    };
-
-    for (i, dep_id) in ticket.deps.iter().enumerate() {
-        let last = i == ticket.deps.len() - 1;
-        match by_id.get(dep_id.as_str()) {
-            Some(dep) => out.push_str(&build_dep_tree_string(dep, by_id, &child_prefix, last)),
-            None => {
-                let connector = if last { "└── " } else { "├── " };
-                out.push_str(&child_prefix);
-                out.push_str(connector);
-                out.push_str(&format!("[?] {dep_id} - (not found)\n"));
+impl<'a> DepTree<'a> {
+    /// Builds the graph for `root`. An epic's children (tickets whose `parent`
+    /// is the epic) are edges alongside its `deps`.
+    fn new(
+        root: &'a str,
+        tickets: &'a [Ticket],
+        by_id: &'a std::collections::HashMap<&'a str, &'a Ticket>,
+    ) -> Self {
+        let mut edges: std::collections::HashMap<&str, Vec<&str>> = tickets
+            .iter()
+            .map(|t| (t.id.as_str(), t.deps.iter().map(String::as_str).collect()))
+            .collect();
+        for child in tickets {
+            let Some(parent) = child.parent.as_deref() else {
+                continue;
+            };
+            let is_epic = by_id
+                .get(parent)
+                .is_some_and(|p| p.ticket_type == Some(Type::Epic));
+            if is_epic {
+                let list = edges.entry(parent).or_default();
+                if !list.contains(&child.id.as_str()) {
+                    list.push(&child.id);
+                }
             }
         }
+        let mut tree = Self {
+            by_id,
+            edges,
+            max_depth: Default::default(),
+            subtree_depth: Default::default(),
+        };
+        tree.measure_depths(root, 0, &mut Vec::new());
+        tree.measure_subtrees(root, &mut Vec::new());
+        tree
     }
 
-    out
+    fn deps(&self, id: &str) -> &[&'a str] {
+        self.edges.get(id).map_or(&[], Vec::as_slice)
+    }
+
+    /// Records the deepest level at which each ticket is reachable from the root.
+    fn measure_depths(&mut self, id: &'a str, depth: usize, path: &mut Vec<&'a str>) {
+        if !self.by_id.contains_key(id) || path.contains(&id) {
+            return;
+        }
+        let entry = self.max_depth.entry(id).or_insert(depth);
+        *entry = (*entry).max(depth);
+        path.push(id);
+        for dep in self.deps(id).to_vec() {
+            self.measure_depths(dep, depth + 1, path);
+        }
+        path.pop();
+    }
+
+    /// Records the deepest level reachable at or below each ticket.
+    fn measure_subtrees(&mut self, id: &'a str, path: &mut Vec<&'a str>) -> usize {
+        if let Some(&known) = self.subtree_depth.get(id) {
+            return known;
+        }
+        let Some(&own) = self.max_depth.get(id) else {
+            return 0;
+        };
+        if path.contains(&id) {
+            return own;
+        }
+        path.push(id);
+        let deepest = self
+            .deps(id)
+            .to_vec()
+            .into_iter()
+            .map(|dep| self.measure_subtrees(dep, path))
+            .fold(own, usize::max);
+        path.pop();
+        self.subtree_depth.insert(id, deepest);
+        deepest
+    }
+
+    fn render(root: &Ticket, tickets: &[Ticket], full: bool) -> String {
+        let by_id: std::collections::HashMap<&str, &Ticket> =
+            tickets.iter().map(|t| (t.id.as_str(), t)).collect();
+        let tree = DepTree::new(&root.id, tickets, &by_id);
+        let mut out = format!("{} [{}] {}\n", root.id, root.status, root.title);
+        let mut printed = std::collections::HashSet::from([root.id.as_str()]);
+        let mut path = vec![root.id.as_str()];
+        tree.render_children(&root.id, 0, "", full, &mut printed, &mut path, &mut out);
+        out
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn render_children(
+        &self,
+        id: &str,
+        depth: usize,
+        prefix: &str,
+        full: bool,
+        printed: &mut std::collections::HashSet<&'a str>,
+        path: &mut Vec<&'a str>,
+        out: &mut String,
+    ) {
+        let mut children: Vec<&'a str> = self
+            .deps(id)
+            .iter()
+            .copied()
+            .filter(|child| {
+                self.max_depth.contains_key(child)
+                    && !path.contains(child)
+                    && (full || (!printed.contains(child) && self.max_depth[child] == depth + 1))
+            })
+            .collect();
+        children.sort_by_key(|child| (self.subtree_depth[child], *child));
+
+        let count = children.len();
+        for (i, child) in children.into_iter().enumerate() {
+            // An earlier sibling's subtree may already have printed this ticket.
+            if !full && printed.contains(child) {
+                continue;
+            }
+            let last = i + 1 == count;
+            let ticket = self.by_id[child];
+            out.push_str(&format!(
+                "{prefix}{}{} [{}] {}\n",
+                if last { "└── " } else { "├── " },
+                ticket.id,
+                ticket.status,
+                ticket.title
+            ));
+            if !full {
+                printed.insert(child);
+            }
+            let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
+            path.push(child);
+            self.render_children(child, depth + 1, &child_prefix, full, printed, path, out);
+            path.pop();
+        }
+    }
 }
 
 fn find_root_tickets(tickets: &[Ticket]) -> Vec<&Ticket> {
@@ -632,19 +737,19 @@ fn dep_tree(backend: &dyn Backend, id: Option<String>, full: bool) -> anyhow::Re
     let by_id: std::collections::HashMap<&str, &Ticket> =
         tickets.iter().map(|t| (t.id.as_str(), t)).collect();
 
-    if full || id.is_none() {
+    let Some(id) = id else {
         for root in find_root_tickets(&tickets) {
-            print!("{}", build_dep_tree_string(root, &by_id, "", true));
+            print!("{}", DepTree::render(root, &tickets, full));
         }
         return Ok(());
-    }
+    };
 
-    let number = resolve(backend, &id.unwrap())?;
+    let number = resolve(backend, &id)?;
     let number_str = number.to_string();
     let ticket = by_id
         .get(number_str.as_str())
         .ok_or_else(|| anyhow::anyhow!("ticket not found: {number_str}"))?;
-    print!("{}", build_dep_tree_string(ticket, &by_id, "", true));
+    print!("{}", DepTree::render(ticket, &tickets, full));
     Ok(())
 }
 
@@ -686,7 +791,14 @@ fn detect_cycles(tickets: &[Ticket]) -> Vec<Vec<String>> {
 
     for t in tickets {
         if !visited.contains(t.id.as_str()) {
-            dfs(&t.id, &by_id, &mut visited, &mut rec_stack, &mut path, &mut cycles);
+            dfs(
+                &t.id,
+                &by_id,
+                &mut visited,
+                &mut rec_stack,
+                &mut path,
+                &mut cycles,
+            );
         }
     }
 
@@ -972,5 +1084,78 @@ mod tests {
         backend.seed("A", &blank_ticket_body("open"));
         let n = resolve(&backend, "1").unwrap();
         assert_eq!(n, 1);
+    }
+
+    fn doc(id: &str, status: &str, deps: &[&str]) -> Ticket {
+        let deps = if deps.is_empty() {
+            String::new()
+        } else {
+            format!("deps: [{}]\n", deps.join(", "))
+        };
+        Ticket::parse(
+            format!(
+                "---\nid: \"{id}\"\nstatus: {status}\n{deps}created: 2026-01-01T00:00:00Z\n---\n# T{id}\n"
+            )
+            .as_bytes(),
+        )
+        .unwrap()
+    }
+
+    fn render(tickets: &[Ticket], root: &str, full: bool) -> String {
+        let root = tickets.iter().find(|t| t.id == root).unwrap();
+        DepTree::render(root, tickets, full)
+    }
+
+    #[test]
+    fn dep_tree_nests_and_places_shared_dep_at_deepest_level() {
+        let tickets = [
+            doc("1", "open", &["2", "3"]),
+            doc("2", "closed", &["3"]),
+            doc("3", "in_progress", &[]),
+        ];
+        assert_eq!(
+            render(&tickets, "1", false),
+            "1 [open] T1\n└── 2 [closed] T2\n    └── 3 [in_progress] T3\n"
+        );
+        assert_eq!(
+            render(&tickets, "1", true),
+            "1 [open] T1\n├── 2 [closed] T2\n│   └── 3 [in_progress] T3\n└── 3 [in_progress] T3\n"
+        );
+    }
+
+    #[test]
+    fn dep_tree_orders_siblings_by_subtree_depth_and_survives_cycles() {
+        let tickets = [
+            doc("1", "open", &["2", "3"]),
+            doc("2", "open", &["4"]),
+            doc("3", "open", &[]),
+            doc("4", "open", &["2"]),
+        ];
+        assert_eq!(
+            render(&tickets, "1", false),
+            "1 [open] T1\n├── 3 [open] T3\n└── 2 [open] T2\n    └── 4 [open] T4\n"
+        );
+    }
+
+    #[test]
+    fn dep_tree_includes_epic_children_nested_under_their_deps() {
+        let epic = Ticket::parse(
+            b"---\nid: \"1\"\nstatus: open\ntype: epic\ncreated: 2026-01-01T00:00:00Z\n---\n# T1\n",
+        )
+        .unwrap();
+        let child = |id: &str, deps: &str| {
+            Ticket::parse(
+                format!(
+                    "---\nid: \"{id}\"\nstatus: open\nparent: \"1\"\ndeps: [{deps}]\ncreated: 2026-01-01T00:00:00Z\n---\n# T{id}\n"
+                )
+                .as_bytes(),
+            )
+            .unwrap()
+        };
+        let tickets = [epic, child("2", ""), child("3", "2"), child("4", "")];
+        assert_eq!(
+            render(&tickets, "1", false),
+            "1 [open] T1\n├── 4 [open] T4\n└── 3 [open] T3\n    └── 2 [open] T2\n"
+        );
     }
 }

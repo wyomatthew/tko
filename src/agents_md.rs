@@ -100,7 +100,11 @@ Never close a ticket whose acceptance criteria are not actually met.
 pub fn run(force: bool) -> anyhow::Result<()> {
     let path = Path::new("AGENTS.md");
 
-    let existing = if path.exists() { std::fs::read_to_string(path)? } else { String::new() };
+    let existing = if path.exists() {
+        std::fs::read_to_string(path)?
+    } else {
+        String::new()
+    };
 
     if existing.contains(SECTION_HEADING) && !force {
         anyhow::bail!(
@@ -123,9 +127,17 @@ pub fn run(force: bool) -> anyhow::Result<()> {
     std::fs::write(path, updated)?;
 
     if created {
-        println!("Created {} with a '{}' section", path.display(), SECTION_HEADING);
+        println!(
+            "Created {} with a '{}' section",
+            path.display(),
+            SECTION_HEADING
+        );
     } else {
-        println!("Appended '{}' section to {}", SECTION_HEADING, path.display());
+        println!(
+            "Appended '{}' section to {}",
+            SECTION_HEADING,
+            path.display()
+        );
     }
     Ok(())
 }
@@ -149,8 +161,11 @@ mod tests {
     }
 
     fn tempfile_dir() -> std::path::PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("tko-agents-md-test-{}-{:?}", std::process::id(), std::thread::current().id()));
+        let dir = std::env::temp_dir().join(format!(
+            "tko-agents-md-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir

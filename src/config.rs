@@ -250,12 +250,18 @@ mod tests {
 
     impl EnvGuard {
         fn new() -> Self {
-            let lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let lock = ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let names = ["TKO_TOKEN", "GITEA_TOKEN", "MY_TOKEN", "XDG_CONFIG_HOME"];
             let saved = names.iter().map(|&n| (n, std::env::var(n).ok())).collect();
             let config_home = tempdir();
             unsafe { std::env::set_var("XDG_CONFIG_HOME", config_home.path()) };
-            Self { _lock: lock, saved, _config_home: config_home }
+            Self {
+                _lock: lock,
+                saved,
+                _config_home: config_home,
+            }
         }
     }
 

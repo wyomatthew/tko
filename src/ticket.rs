@@ -344,7 +344,13 @@ fn parse_body(content: &str) -> (String, String, String, String, Vec<Note>) {
         &mut notes_raw,
     );
 
-    (title, description, design, acceptance, parse_notes(&notes_raw))
+    (
+        title,
+        description,
+        design,
+        acceptance,
+        parse_notes(&notes_raw),
+    )
 }
 
 /// Parses `### <RFC3339>` note entries from the `## Notes` section content.

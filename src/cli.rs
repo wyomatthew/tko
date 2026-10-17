@@ -264,10 +264,10 @@ pub enum DepCommand {
 
     /// Show the dependency tree.
     Tree {
-        /// Root ticket id (omit with `--full`).
+        /// Root ticket id; omit to show every open root ticket.
         id: Option<String>,
 
-        /// Show the full tree for all tickets.
+        /// Show every path instead of placing each ticket once at its deepest level.
         #[arg(long)]
         full: bool,
     },

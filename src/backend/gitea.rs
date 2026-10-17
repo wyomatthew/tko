@@ -48,7 +48,10 @@ impl GiteaBackend {
         format!("{}{}", self.api_base, path)
     }
 
-    fn auth(&self, builder: reqwest::blocking::RequestBuilder) -> reqwest::blocking::RequestBuilder {
+    fn auth(
+        &self,
+        builder: reqwest::blocking::RequestBuilder,
+    ) -> reqwest::blocking::RequestBuilder {
         builder.header("Authorization", format!("token {}", self.token))
     }
 
@@ -119,9 +122,7 @@ impl GiteaBackend {
     }
 }
 
-fn check_status(
-    response: reqwest::blocking::Response,
-) -> Result<reqwest::blocking::Response> {
+fn check_status(response: reqwest::blocking::Response) -> Result<reqwest::blocking::Response> {
     if response.status().is_success() {
         Ok(response)
     } else {
@@ -218,8 +219,10 @@ impl Backend for GiteaBackend {
     }
 
     fn list_comments(&self, number: u64) -> Result<Vec<Comment>> {
-        let comments: Vec<ApiComment> =
-            self.send(self.client.get(self.url(&format!("/issues/{number}/comments"))))?;
+        let comments: Vec<ApiComment> = self.send(
+            self.client
+                .get(self.url(&format!("/issues/{number}/comments"))),
+        )?;
         comments.into_iter().map(TryInto::try_into).collect()
     }
 
@@ -242,8 +245,10 @@ impl Backend for GiteaBackend {
     }
 
     fn list_dependencies(&self, number: u64) -> Result<Vec<u64>> {
-        let issues: Vec<ApiIssue> =
-            self.send(self.client.get(self.url(&format!("/issues/{number}/dependencies"))))?;
+        let issues: Vec<ApiIssue> = self.send(
+            self.client
+                .get(self.url(&format!("/issues/{number}/dependencies"))),
+        )?;
         Ok(issues.into_iter().map(|i| i.number).collect())
     }
 }
@@ -407,7 +412,10 @@ mod tests {
         let backend = test_backend(&server.url());
 
         let list_labels = server
-            .mock("GET", Matcher::Regex(r"^/api/v1/repos/myorg/myproject/labels".to_string()))
+            .mock(
+                "GET",
+                Matcher::Regex(r"^/api/v1/repos/myorg/myproject/labels".to_string()),
+            )
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(r#"[{"id":1,"name":"tko:type:bug"}]"#)
@@ -503,7 +511,10 @@ mod tests {
         let backend = test_backend(&server.url());
 
         let add = server
-            .mock("POST", "/api/v1/repos/myorg/myproject/issues/5/dependencies")
+            .mock(
+                "POST",
+                "/api/v1/repos/myorg/myproject/issues/5/dependencies",
+            )
             .match_body(Matcher::Json(serde_json::json!({"index": 6})))
             .with_status(201)
             .create();
@@ -511,7 +522,10 @@ mod tests {
         add.assert();
 
         let remove = server
-            .mock("DELETE", "/api/v1/repos/myorg/myproject/issues/5/dependencies")
+            .mock(
+                "DELETE",
+                "/api/v1/repos/myorg/myproject/issues/5/dependencies",
+            )
             .match_body(Matcher::Json(serde_json::json!({"index": 6})))
             .with_status(200)
             .create();

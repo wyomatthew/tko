@@ -42,7 +42,10 @@ struct ConfigToml {
 pub fn run(args: InitArgs) -> anyhow::Result<()> {
     let path = Path::new("tko.toml");
     if path.exists() && !args.force {
-        anyhow::bail!("{} already exists; pass --force to overwrite", path.display());
+        anyhow::bail!(
+            "{} already exists; pass --force to overwrite",
+            path.display()
+        );
     }
 
     let missing_required = args.url.is_none() || args.owner.is_none() || args.repo.is_none();
@@ -66,7 +69,10 @@ pub fn run(args: InitArgs) -> anyhow::Result<()> {
         if args.repo.is_none() {
             missing.push("--repo");
         }
-        anyhow::bail!("missing required flag(s) for non-interactive init: {}", missing.join(", "));
+        anyhow::bail!(
+            "missing required flag(s) for non-interactive init: {}",
+            missing.join(", ")
+        );
     } else {
         prompt_for_config(&args)?
     };
@@ -146,7 +152,9 @@ fn render_toml(
 fn validate_kind(kind: &str) -> anyhow::Result<()> {
     match kind.to_lowercase().as_str() {
         "gitea" => Ok(()),
-        other => anyhow::bail!("unsupported backend kind '{other}': only 'gitea' is supported in v1"),
+        other => {
+            anyhow::bail!("unsupported backend kind '{other}': only 'gitea' is supported in v1")
+        }
     }
 }
 
@@ -154,7 +162,9 @@ fn validate_url(url: &str) -> anyhow::Result<()> {
     let rest = url
         .strip_prefix("https://")
         .or_else(|| url.strip_prefix("http://"))
-        .ok_or_else(|| anyhow::anyhow!("invalid url '{url}': must start with http:// or https://"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("invalid url '{url}': must start with http:// or https://")
+        })?;
     let host = rest.split('/').next().unwrap_or("");
     if host.is_empty() || host.contains(char::is_whitespace) {
         anyhow::bail!("invalid url '{url}': missing or malformed host");
@@ -167,7 +177,10 @@ fn prompt_for_config(
 ) -> anyhow::Result<(String, String, String, String, Option<String>)> {
     let kind = prompt("Backend kind", args.kind.as_deref().or(Some("gitea")))?;
     let url = loop {
-        let candidate = prompt("Backend URL (e.g. https://gitea.example.com)", args.url.as_deref())?;
+        let candidate = prompt(
+            "Backend URL (e.g. https://gitea.example.com)",
+            args.url.as_deref(),
+        )?;
         match validate_url(&candidate) {
             Ok(()) => break candidate,
             Err(e) => eprintln!("{e}"),
@@ -175,7 +188,10 @@ fn prompt_for_config(
     };
     let owner = prompt("Repo owner", args.owner.as_deref())?;
     let repo = prompt("Repo name", args.repo.as_deref())?;
-    let token_env = prompt("Token env var", args.token_env.as_deref().or(Some("TKO_TOKEN")))?;
+    let token_env = prompt(
+        "Token env var",
+        args.token_env.as_deref().or(Some("TKO_TOKEN")),
+    )?;
     let token_env = (!token_env.is_empty()).then_some(token_env);
     Ok((kind, url, owner, repo, token_env))
 }
@@ -229,9 +245,14 @@ mod tests {
 
     #[test]
     fn render_toml_round_trips_through_config_loader() {
-        let toml_str =
-            render_toml("gitea", "https://gitea.example.com", "myorg", "myproject", Some("MY_TOKEN"))
-                .unwrap();
+        let toml_str = render_toml(
+            "gitea",
+            "https://gitea.example.com",
+            "myorg",
+            "myproject",
+            Some("MY_TOKEN"),
+        )
+        .unwrap();
         let config: Config = toml::from_str(&toml_str).unwrap();
         assert_eq!(config.backend.owner, "myorg");
         assert_eq!(config.backend.repo, "myproject");
@@ -241,8 +262,14 @@ mod tests {
 
     #[test]
     fn render_toml_omits_token_env_when_absent() {
-        let toml_str =
-            render_toml("gitea", "https://gitea.example.com", "myorg", "myproject", None).unwrap();
+        let toml_str = render_toml(
+            "gitea",
+            "https://gitea.example.com",
+            "myorg",
+            "myproject",
+            None,
+        )
+        .unwrap();
         assert!(!toml_str.contains("token_env"));
         let config: Config = toml::from_str(&toml_str).unwrap();
         assert!(config.backend.token_env.is_none());

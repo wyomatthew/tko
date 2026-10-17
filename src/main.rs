@@ -19,8 +19,25 @@ use crate::config::{BackendKind, Config};
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    if let Command::Init { kind, url, owner, repo, token_env, force, non_interactive } = cli.command {
-        return init::run(init::InitArgs { kind, url, owner, repo, token_env, force, non_interactive });
+    if let Command::Init {
+        kind,
+        url,
+        owner,
+        repo,
+        token_env,
+        force,
+        non_interactive,
+    } = cli.command
+    {
+        return init::run(init::InitArgs {
+            kind,
+            url,
+            owner,
+            repo,
+            token_env,
+            force,
+            non_interactive,
+        });
     }
 
     if let Command::AgentsMd { force } = cli.command {
